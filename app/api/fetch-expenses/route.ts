@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
+import { normalizeDate } from '@/lib/date-utils';
 
 export async function GET() {
   try {
@@ -65,7 +66,7 @@ export async function GET() {
     const expenses = rows.slice(1).map((row: any[]) => ({
       timestamp: row[0] || '', // Column A: Timestamp
       subject: row[1] || '',    // Column B: Subject
-      date: row[2] || '',       // Column C: Date (used for filtering)
+      date: normalizeDate(row[2] || ''), // Column C: Date (used for filtering)
       amount: parseFloat(row[3]) || 0, // Column D: Amount
       category: row[4] || '',   // Column E: Category
       description: row[5] || '', // Column F: Description

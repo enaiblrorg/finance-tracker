@@ -5,9 +5,11 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, RefreshCw, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import DatePicker from "@/components/ui/date-picker"
+import { RefreshCw, ChevronLeft, ChevronRight, X, ArrowUp, ArrowDown } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { subjects, subjectsIncome } from '@/lib/selections';
+import { normalizeDate } from '@/lib/date-utils';
 import { MultiSelect } from '@/components/ui/multi-select';
 import {
   Table,
@@ -56,6 +58,91 @@ interface FormReportProps {
   onRefresh: () => void;
 }
 
+function formatDateRangeParts(fromDateStr: string, toDateStr: string) {
+  const fromDate = fromDateStr ? new Date(fromDateStr) : null;
+  const toDate = toDateStr ? new Date(toDateStr) : null;
+
+  if (!fromDate || !toDate || isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+    return { startPart: fromDateStr, endPart: toDateStr, suffix: '' };
+  }
+
+  const fromDay = fromDate.getDate();
+  const fromMonth = fromDate.toLocaleDateString('en-GB', { month: 'short' });
+  const fromYear = fromDate.getFullYear();
+
+  const toDay = toDate.getDate();
+  const toMonth = toDate.toLocaleDateString('en-GB', { month: 'short' });
+  const toYear = toDate.getFullYear();
+
+  if (fromYear === toYear && fromMonth === toMonth) {
+    return {
+      startPart: `${fromDay}`,
+      endPart: `${toDay}`,
+      suffix: `${fromMonth} ${fromYear}`,
+    };
+  }
+
+  if (fromYear === toYear) {
+    return {
+      startPart: `${fromDay} ${fromMonth}`,
+      endPart: `${toDay} ${toMonth}`,
+      suffix: `${fromYear}`,
+    };
+  }
+
+  return {
+    startPart: `${fromDay} ${fromMonth} ${fromYear}`,
+    endPart: `${toDay} ${toMonth} ${toYear}`,
+    suffix: '',
+  };
+}
+
+function InlineDatePicker({
+  date,
+  setDate,
+  label,
+}: {
+  date: string;
+  setDate: (date: string) => void;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [month, setMonth] = useState<Date>(() => (date ? new Date(date) : new Date()));
+  const selectedDate = date ? new Date(date) : undefined;
+
+  const handleSelect = (newDate: Date | undefined) => {
+    if (newDate) {
+      setDate(newDate.toISOString());
+      setOpen(false);
+    }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    // Each time the picker opens, jump to the selected date's month so the
+    // chosen date is visible and highlighted instead of defaulting to today.
+    if (nextOpen && selectedDate) {
+      setMonth(selectedDate);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center font-medium text-primary underline-offset-4 hover:underline decoration-dotted cursor-pointer"
+        >
+          {label}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 bg-white dark:bg-zinc-950 rounded-2xl border-none shadow-xl" align="center" collisionPadding={8}>
+        <Calendar mode="single" month={month} onMonthChange={setMonth} selected={selectedDate} onSelect={handleSelect} initialFocus />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function FormReport({ expenses, incomes, loading, error, onRefresh }: FormReportProps) {
 
   // Filters
@@ -82,6 +169,18 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedIncomeCategory, setSelectedIncomeCategory] = useState<string | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [detailSort, setDetailSort] = useState<{ column: 'date' | 'total'; direction: 'asc' | 'desc' }>({
+    column: 'date',
+    direction: 'desc',
+  });
+
+  const handleDetailSort = (column: 'date' | 'total') => {
+    setDetailSort((prev) =>
+      prev.column === column
+        ? { column, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { column, direction: 'desc' }
+    );
+  };
 
 
   const formatCurrency = (amount: number) => {
@@ -90,27 +189,6 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
       currency: 'IDR',
       minimumFractionDigits: 0,
     }).format(amount);
-  };
-
-  const normalizeDate = (dateStr: string) => {
-    if (!dateStr) return '';
-
-    // Handle different date formats from spreadsheet
-    // Try to parse as YYYY-MM-DD first
-    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      return dateStr;
-    }
-
-    // Try to parse other formats (MM/DD/YYYY, DD/MM/YYYY, etc.)
-    const date = new Date(dateStr);
-    if (!isNaN(date.getTime())) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    }
-
-    return dateStr;
   };
 
   const formatDisplayDate = (dateStr: string) => {
@@ -123,34 +201,6 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
       month: 'short',
       year: 'numeric'
     });
-  };
-
-  const formatDateRange = (fromDateStr: string, toDateStr: string) => {
-    if (!fromDateStr || !toDateStr) return '';
-
-    const fromDate = new Date(fromDateStr);
-    const toDate = new Date(toDateStr);
-
-    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return `${fromDateStr} - ${toDateStr}`;
-
-    const fromDay = fromDate.getDate();
-    const fromMonth = fromDate.toLocaleDateString('en-GB', { month: 'short' });
-    const fromYear = fromDate.getFullYear();
-
-    const toDay = toDate.getDate();
-    const toMonth = toDate.toLocaleDateString('en-GB', { month: 'short' });
-    const toYear = toDate.getFullYear();
-
-    if (fromYear === toYear) {
-      if (fromMonth === toMonth) {
-        if (fromDay === toDay) {
-          return `${fromDay} ${fromMonth} ${fromYear}`;
-        }
-        return `${fromDay} - ${toDay} ${fromMonth} ${fromYear}`;
-      }
-      return `${fromDay} ${fromMonth} - ${toDay} ${toMonth} ${fromYear}`;
-    }
-    return `${fromDay} ${fromMonth} ${fromYear} - ${toDay} ${toMonth} ${toYear}`;
   };
 
   const filterData = (data: any[], type: 'expenses' | 'incomes') => {
@@ -201,6 +251,8 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
   const filteredExpenses = filterData(expenses, 'expenses');
   const filteredIncomes = filterData(incomes, 'incomes');
 
+  const dateRangeParts = formatDateRangeParts(dateFromFilter, dateToFilter);
+
   const expensesChartData = prepareChartData(filteredExpenses);
   const incomesChartData = prepareChartData(filteredIncomes);
 
@@ -233,7 +285,32 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
       return acc;
     }, {} as Record<string, any[]>);
 
-    const sortedDates = Object.keys(groupedData).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    const getDayTotal = (date: string) =>
+      groupedData[date].reduce((sum: number, item: ExpenseData | IncomeData) => sum + item.amount, 0);
+
+    const sortedDates = Object.keys(groupedData).sort((a, b) => {
+      const comparison =
+        detailSort.column === 'date'
+          ? new Date(a).getTime() - new Date(b).getTime()
+          : getDayTotal(a) - getDayTotal(b);
+      return detailSort.direction === 'asc' ? comparison : -comparison;
+    });
+
+    const renderSortableHead = (column: 'date' | 'total', label: string, align: 'left' | 'right' = 'left') => (
+      <TableHead
+        className={`cursor-pointer select-none hover:text-foreground ${align === 'right' ? 'text-right' : ''}`}
+        onClick={() => handleDetailSort(column)}
+      >
+        <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end w-full' : ''}`}>
+          {label}
+          {detailSort.column === column && (
+            detailSort.direction === 'asc'
+              ? <ArrowUp className="h-3 w-3" />
+              : <ArrowDown className="h-3 w-3" />
+          )}
+        </span>
+      </TableHead>
+    );
 
     return (
       <div className="mt-4 border rounded-lg p-4 bg-gray-50/50 dark:bg-gray-800/20 relative">
@@ -249,8 +326,8 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              {renderSortableHead('date', 'Date')}
+              {renderSortableHead('total', 'Total', 'right')}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -362,7 +439,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
           {/* Filters */}
           <div className="space-y-2">
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {/* Subject Filter */}
               <div className="space-y-2">
                 <MultiSelect
@@ -373,44 +450,19 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                 />
               </div>
 
-              {/* Date From */}
+              {/* Reimbursed Filter */}
               <div className="space-y-2">
-                {/* <Label htmlFor="date-from">From</Label> */}
-                <DatePicker
-                  date={dateFromFilter}
-                  setDate={setDateFromFilter}
-                  triggerClassName="w-full"
-                  icon={<Calendar className="h-4 w-4" />}
-                />
+                <Select value={reimbursedFilter} onValueChange={setReimbursedFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Reimbursed</SelectItem>
+                    <SelectItem value="TRUE">Yes</SelectItem>
+                    <SelectItem value="FALSE">No</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
-              {/* Date To */}
-              <div className="space-y-2">
-                {/* <Label htmlFor="date-to">To</Label> */}
-                <DatePicker
-                  date={dateToFilter}
-                  setDate={setDateToFilter}
-                  triggerClassName="w-full"
-                  icon={<Calendar className="h-4 w-4" />}
-                />
-              </div>
-
-              {/* Reimbursed Filter (only for expenses) */}
-              {activeReportTab === 'expenses' && (
-                <div className="space-y-2">
-                  {/* <Label htmlFor="reimbursed-filter">Reimbursed</Label> */}
-                  <Select value={reimbursedFilter} onValueChange={setReimbursedFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Reimbursed</SelectItem>
-                      <SelectItem value="TRUE">Yes</SelectItem>
-                      <SelectItem value="FALSE">No</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
             </div>
 
           </div>
@@ -423,16 +475,23 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
               />
             </h4>
             <p className="text-2xl font-bold text-primary">{formatCurrency(totalExpenses)}</p>
-            <p className="text-sm text-primary/50">{formatDateRange(dateFromFilter, dateToFilter)} • {filteredExpenses.length} Transactions</p>
+            <div className="text-sm text-primary/50 flex items-center justify-center gap-1.5 flex-wrap">
+              <InlineDatePicker date={dateFromFilter} setDate={setDateFromFilter} label={dateRangeParts.startPart} />
+              <span>-</span>
+              <InlineDatePicker date={dateToFilter} setDate={setDateToFilter} label={dateRangeParts.endPart} />
+              {dateRangeParts.suffix && <span>{dateRangeParts.suffix}</span>}
+              <span>•</span>
+              <span>{filteredExpenses.length} Transactions</span>
+            </div>
           </div>
 
-          {expensesChartData.length > 0 ? (
-            <div className="space-y-2">
-              <div className="h-64 relative flex items-center justify-between">
-                <Button variant="ghost" size="icon" onClick={handlePreviousMonth}>
-                  <ChevronLeft className="h-6 w-6" />
-                </Button>
-                <div className="flex-1 h-full">
+          <div className="space-y-2">
+            <div className="h-64 relative flex items-center justify-between">
+              <Button variant="ghost" size="icon" onClick={handlePreviousMonth}>
+                <ChevronLeft className="h-6 w-6" />
+              </Button>
+              <div className="flex-1 h-full relative">
+                {expensesChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                       <Pie
@@ -458,12 +517,18 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                       <Tooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
-                <Button variant="ghost" size="icon" onClick={handleNextMonth}>
-                  <ChevronRight className="h-6 w-6" />
-                </Button>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="text-gray-500">No expense data matches the selected filters.</p>
+                  </div>
+                )}
               </div>
-              {/* Custom Legend */}
+              <Button variant="ghost" size="icon" onClick={handleNextMonth}>
+                <ChevronRight className="h-6 w-6" />
+              </Button>
+            </div>
+            {/* Custom Legend */}
+            {expensesChartData.length > 0 && (
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {expensesChartData.map((entry) => {
                   const percentage = ((entry.value / totalExpenses) * 100).toFixed(1);
@@ -483,13 +548,9 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                   );
                 })}
               </div>
-              {renderDetailedTable('expenses')}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No expense data matches the selected filters.</p>
-            </div>
-          )}
+            )}
+            {renderDetailedTable('expenses')}
+          </div>
         </TabsContent>
 
         {/* Income Report */}
@@ -497,7 +558,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                     {/* Filters */}
           <div className="space-y-2">
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {/* Subject Filter */}
               <div className="space-y-2">
                 <MultiSelect
@@ -505,28 +566,6 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                   selected={incomeSubjectFilters}
                   onChange={setIncomeSubjectFilters}
                   placeholder="All Subjects"
-                />
-              </div>
-
-              {/* Date From */}
-              <div className="space-y-2">
-                {/* <Label htmlFor="date-from">From</Label> */}
-                <DatePicker
-                  date={dateFromFilter}
-                  setDate={setDateFromFilter}
-                  triggerClassName="w-full"
-                  icon={<Calendar className="h-4 w-4" />}
-                />
-              </div>
-
-              {/* Date To */}
-              <div className="space-y-2">
-                {/* <Label htmlFor="date-to">To</Label> */}
-                <DatePicker
-                  date={dateToFilter}
-                  setDate={setDateToFilter}
-                  triggerClassName="w-full"
-                  icon={<Calendar className="h-4 w-4" />}
                 />
               </div>
             </div>
@@ -540,53 +579,68 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
               />
             </h4>
             <p className="text-2xl font-bold text-primary">{formatCurrency(totalIncomes)}</p>
-            <p className="text-sm text-primary/50">{formatDateRange(dateFromFilter, dateToFilter)} • {filteredIncomes.length} Transactions</p>
+            <div className="text-sm text-primary/50 flex items-center justify-center gap-1.5 flex-wrap">
+              <InlineDatePicker date={dateFromFilter} setDate={setDateFromFilter} label={dateRangeParts.startPart} />
+              <span>-</span>
+              <InlineDatePicker date={dateToFilter} setDate={setDateToFilter} label={dateRangeParts.endPart} />
+              {dateRangeParts.suffix && <span>{dateRangeParts.suffix}</span>}
+              <span>•</span>
+              <span>{filteredIncomes.length} Transactions</span>
+            </div>
           </div>
 
-          {incomesChartData.length > 0 ? (
-            <div className="space-y-2">
-              <div className="h-64 relative flex items-center justify-between">
-                <Button variant="ghost" size="icon" onClick={handlePreviousMonth}>
-                  <ChevronLeft className="h-6 w-6" />
-                </Button>
-                <div className="flex-1 h-full relative">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-                      <Pie
-                        data={incomesChartData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={110}
-                        innerRadius={55}
-                        fill="#8884d8"
-                        dataKey="value"
-                        onClick={(entry) => handleCategoryClick(entry.name, 'incomes')}
-                        className="cursor-pointer"
-                      >
-                        {incomesChartData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={entry.color}
-                            opacity={selectedIncomeCategory ? (selectedIncomeCategory === entry.name ? 1 : 0.3) : 1}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="text-center">
-                      <div className="text-sm text-gray-600">Total</div>
-                      <div className="text-lg font-bold text-green-600">{formatCurrency(totalIncomes)}</div>
+          <div className="space-y-2">
+            <div className="h-64 relative flex items-center justify-between">
+              <Button variant="ghost" size="icon" onClick={handlePreviousMonth}>
+                <ChevronLeft className="h-6 w-6" />
+              </Button>
+              <div className="flex-1 h-full relative">
+                {incomesChartData.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                        <Pie
+                          data={incomesChartData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={110}
+                          innerRadius={55}
+                          fill="#8884d8"
+                          dataKey="value"
+                          onClick={(entry) => handleCategoryClick(entry.name, 'incomes')}
+                          className="cursor-pointer"
+                        >
+                          {incomesChartData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.color}
+                              opacity={selectedIncomeCategory ? (selectedIncomeCategory === entry.name ? 1 : 0.3) : 1}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <div className="text-sm text-gray-600">Total</div>
+                        <div className="text-lg font-bold text-green-600">{formatCurrency(totalIncomes)}</div>
+                      </div>
                     </div>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="text-gray-500">No income data matches the selected filters.</p>
                   </div>
-                </div>
-                <Button variant="ghost" size="icon" onClick={handleNextMonth}>
-                  <ChevronRight className="h-6 w-6" />
-                </Button>
+                )}
               </div>
-              {/* Custom Legend */}
+              <Button variant="ghost" size="icon" onClick={handleNextMonth}>
+                <ChevronRight className="h-6 w-6" />
+              </Button>
+            </div>
+            {/* Custom Legend */}
+            {incomesChartData.length > 0 && (
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {incomesChartData.map((entry) => {
                   const percentage = ((entry.value / totalIncomes) * 100).toFixed(1);
@@ -606,13 +660,9 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                   );
                 })}
               </div>
-              {renderDetailedTable('incomes')}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No income data matches the selected filters.</p>
-            </div>
-          )}
+            )}
+            {renderDetailedTable('incomes')}
+          </div>
         </TabsContent>
       </Tabs>
 

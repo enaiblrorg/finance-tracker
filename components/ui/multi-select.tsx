@@ -52,7 +52,7 @@ export function MultiSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all font-normal text-left"
+          className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground hover:bg-background hover:text-foreground active:scale-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all font-normal text-left"
         >
           <div className="flex flex-wrap gap-1">
             {selected.length === 0 && <span className="text-muted-foreground">{placeholder}</span>}
@@ -75,13 +75,17 @@ export function MultiSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0">
+      <PopoverContent
+        className="min-w-[12rem] w-[var(--radix-popper-anchor-width)] p-0 rounded-xl border border-border bg-white dark:bg-zinc-950 text-popover-foreground shadow-md"
+        collisionPadding={8}
+      >
         <Command>
           <CommandInput placeholder="Search..." />
           <CommandEmpty>No item found.</CommandEmpty>
-          <CommandList>
+          <CommandList className="max-h-[min(300px,50vh)]">
             <CommandGroup>
               <CommandItem
+                className="group"
                 onSelect={() => {
                   if (selected.length === options.length) {
                     onChange([])
@@ -92,7 +96,7 @@ export function MultiSelect({
               >
                 <div
                   className={cn(
-                    "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                    "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary group-data-[selected=true]:border-accent-foreground",
                     selected.length === options.length
                       ? "bg-primary text-primary-foreground"
                       : "opacity-50 [&_svg]:invisible"
@@ -107,11 +111,12 @@ export function MultiSelect({
                 return (
                   <CommandItem
                     key={option.value}
+                    className="group"
                     onSelect={() => handleSelect(option.value)}
                   >
                     <div
                       className={cn(
-                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary group-data-[selected=true]:border-accent-foreground",
                         isSelected
                           ? "bg-primary text-primary-foreground"
                           : "opacity-50 [&_svg]:invisible"
