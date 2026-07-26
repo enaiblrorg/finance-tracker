@@ -5,9 +5,18 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, RefreshCw } from 'lucide-react';
+import { Calendar, RefreshCw, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import DatePicker from "@/components/ui/date-picker"
 import { subjects, subjectsIncome } from '@/lib/selections';
+import { MultiSelect } from '@/components/ui/multi-select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
 interface ExpenseData {
   timestamp: string;
@@ -50,7 +59,8 @@ interface FormReportProps {
 export function FormReport({ expenses, incomes, loading, error, onRefresh }: FormReportProps) {
 
   // Filters
-  const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  const [expenseSubjectFilters, setExpenseSubjectFilters] = useState<string[]>([]);
+  const [incomeSubjectFilters, setIncomeSubjectFilters] = useState<string[]>([]);
   const [dateFromFilter, setDateFromFilter] = useState<string>(() => {
     const today = new Date();
     // Create date in local timezone to avoid UTC conversion issues
@@ -68,6 +78,10 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
   });
   const [reimbursedFilter, setReimbursedFilter] = useState<string>('all');
   const [activeReportTab, setActiveReportTab] = useState('expenses');
+
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedIncomeCategory, setSelectedIncomeCategory] = useState<string | null>(null);
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
 
   const formatCurrency = (amount: number) => {
@@ -102,7 +116,8 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
   const filterData = (data: any[], type: 'expenses' | 'incomes') => {
     return data.filter(item => {
       // Subject filter
-      if (subjectFilter !== 'all' && item.subject !== subjectFilter) {
+      const activeFilters = type === 'expenses' ? expenseSubjectFilters : incomeSubjectFilters;
+      if (activeFilters.length > 0 && !activeFilters.includes(item.subject)) {
         return false;
       }
 
@@ -152,6 +167,86 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
   const totalExpenses = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
   const totalIncomes = filteredIncomes.reduce((sum, item) => sum + item.amount, 0);
 
+  const handleCategoryClick = (categoryName: string, type: 'expenses' | 'incomes') => {
+    if (type === 'expenses') {
+      setSelectedCategory(selectedCategory === categoryName ? null : categoryName);
+      setSelectedIncomeCategory(null);
+    } else {
+      setSelectedIncomeCategory(selectedIncomeCategory === categoryName ? null : categoryName);
+      setSelectedCategory(null);
+    }
+    setExpandedDate(null);
+  };
+
+  const renderDetailedTable = (type: 'expenses' | 'incomes') => {
+    const activeCategory = type === 'expenses' ? selectedCategory : selectedIncomeCategory;
+    if (!activeCategory) return null;
+
+    const data = type === 'expenses' ? filteredExpenses : filteredIncomes;
+    const categoryData = data.filter(item => item.category === activeCategory);
+
+    // Group by date
+    const groupedData = categoryData.reduce((acc, item) => {
+      const date = normalizeDate(item.date);
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(item);
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    const sortedDates = Object.keys(groupedData).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+    return (
+      <div className="mt-4 border rounded-lg p-4 bg-gray-50/50 dark:bg-gray-800/20 relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2 right-2 h-6 w-6"
+          onClick={() => type === 'expenses' ? setSelectedCategory(null) : setSelectedIncomeCategory(null)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        <h5 className="font-semibold mb-4 text-center">Details for {activeCategory}</h5>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead className="text-right">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedDates.map(date => {
+              const dayItems = groupedData[date];
+              const dayTotal = dayItems.reduce((sum: number, item: any) => sum + item.amount, 0);
+              const isExpanded = expandedDate === date;
+
+              return (
+                <React.Fragment key={date}>
+                  <TableRow
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() => setExpandedDate(isExpanded ? null : date)}
+                  >
+                    <TableCell className="font-medium">{date}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(dayTotal)}</TableCell>
+                  </TableRow>
+                  {isExpanded && dayItems.map((item: any, idx: number) => (
+                    <TableRow key={`${date}-${idx}`} className="bg-gray-50 dark:bg-gray-900/50 text-sm">
+                      <TableCell className="pl-6 text-gray-600 dark:text-gray-400">
+                        {item.description || item.subject}
+                      </TableCell>
+                      <TableCell className="text-right text-gray-600 dark:text-gray-400">
+                        {formatCurrency(item.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0];
@@ -165,6 +260,26 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
       );
     }
     return null;
+  };
+
+  const handlePreviousMonth = () => {
+    if (!dateFromFilter) return;
+    const currentFrom = new Date(dateFromFilter);
+    const prevMonthFirstDay = new Date(currentFrom.getFullYear(), currentFrom.getMonth() - 1, 1);
+    const prevMonthLastDay = new Date(currentFrom.getFullYear(), currentFrom.getMonth(), 0);
+
+    setDateFromFilter(`${prevMonthFirstDay.getFullYear()}-${String(prevMonthFirstDay.getMonth() + 1).padStart(2, '0')}-${String(prevMonthFirstDay.getDate()).padStart(2, '0')}`);
+    setDateToFilter(`${prevMonthLastDay.getFullYear()}-${String(prevMonthLastDay.getMonth() + 1).padStart(2, '0')}-${String(prevMonthLastDay.getDate()).padStart(2, '0')}`);
+  };
+
+  const handleNextMonth = () => {
+    if (!dateFromFilter) return;
+    const currentFrom = new Date(dateFromFilter);
+    const nextMonthFirstDay = new Date(currentFrom.getFullYear(), currentFrom.getMonth() + 1, 1);
+    const nextMonthLastDay = new Date(currentFrom.getFullYear(), currentFrom.getMonth() + 2, 0);
+
+    setDateFromFilter(`${nextMonthFirstDay.getFullYear()}-${String(nextMonthFirstDay.getMonth() + 1).padStart(2, '0')}-${String(nextMonthFirstDay.getDate()).padStart(2, '0')}`);
+    setDateToFilter(`${nextMonthLastDay.getFullYear()}-${String(nextMonthLastDay.getMonth() + 1).padStart(2, '0')}-${String(nextMonthLastDay.getDate()).padStart(2, '0')}`);
   };
 
   const refreshData = async () => {
@@ -210,20 +325,12 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
             <div className="grid grid-cols-4 gap-2">
               {/* Subject Filter */}
               <div className="space-y-2">
-                {/* <Label htmlFor="subject-filter">Subject</Label> */}
-                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All subjects" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Subjects</SelectItem>
-                    {(activeReportTab === 'expenses' ? subjects : subjectsIncome).map((subject) => (
-                      <SelectItem key={subject.value} value={subject.value}>
-                        {subject.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MultiSelect
+                  options={subjects}
+                  selected={expenseSubjectFilters}
+                  onChange={setExpenseSubjectFilters}
+                  placeholder="All Subjects"
+                />
               </div>
 
               {/* Date From */}
@@ -281,42 +388,62 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
 
           {expensesChartData.length > 0 ? (
             <div className="space-y-2">
-              <div className="h-64 relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-                    <Pie
-                      data={expensesChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={110}
-                      innerRadius={55}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {expensesChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="h-64 relative flex items-center justify-between">
+                <Button variant="ghost" size="icon" onClick={handlePreviousMonth}>
+                  <ChevronLeft className="h-6 w-6" />
+                </Button>
+                <div className="flex-1 h-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                      <Pie
+                        data={expensesChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={110}
+                        innerRadius={55}
+                        fill="#8884d8"
+                        dataKey="value"
+                        onClick={(entry) => handleCategoryClick(entry.name, 'expenses')}
+                        className="cursor-pointer"
+                      >
+                        {expensesChartData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.color}
+                            opacity={selectedCategory ? (selectedCategory === entry.name ? 1 : 0.3) : 1}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <Button variant="ghost" size="icon" onClick={handleNextMonth}>
+                  <ChevronRight className="h-6 w-6" />
+                </Button>
               </div>
               {/* Custom Legend */}
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {expensesChartData.map((entry) => {
                   const percentage = ((entry.value / totalExpenses) * 100).toFixed(1);
+                  const isSelected = selectedCategory === entry.name;
                   return (
-                    <div key={entry.name} className="flex items-center gap-2 text-xs">
+                    <div
+                      key={entry.name}
+                      className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded transition-colors ${isSelected ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+                      onClick={() => handleCategoryClick(entry.name, 'expenses')}
+                    >
                       <div 
                         className="w-3 h-3 rounded" 
                         style={{ backgroundColor: entry.color }}
                       ></div>
-                      <span>{entry.name} ({percentage}%)</span>
+                      <span className={isSelected ? 'font-bold' : ''}>{entry.name} ({percentage}%)</span>
                     </div>
                   );
                 })}
               </div>
+              {renderDetailedTable('expenses')}
             </div>
           ) : (
             <div className="text-center py-8">
@@ -333,20 +460,12 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
             <div className="grid grid-cols-3 gap-2">
               {/* Subject Filter */}
               <div className="space-y-2">
-                {/* <Label htmlFor="subject-filter">Subject</Label> */}
-                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All subjects" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Subjects</SelectItem>
-                    {(activeReportTab === 'expenses' ? subjects : subjectsIncome).map((subject) => (
-                      <SelectItem key={subject.value} value={subject.value}>
-                        {subject.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MultiSelect
+                  options={subjectsIncome}
+                  selected={incomeSubjectFilters}
+                  onChange={setIncomeSubjectFilters}
+                  placeholder="All Subjects"
+                />
               </div>
 
               {/* Date From */}
@@ -386,48 +505,68 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
 
           {incomesChartData.length > 0 ? (
             <div className="space-y-2">
-              <div className="h-64 relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-                    <Pie
-                      data={incomesChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={110}
-                      innerRadius={55}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {incomesChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-sm text-gray-600">Total</div>
-                    <div className="text-lg font-bold text-green-600">{formatCurrency(totalIncomes)}</div>
+              <div className="h-64 relative flex items-center justify-between">
+                <Button variant="ghost" size="icon" onClick={handlePreviousMonth}>
+                  <ChevronLeft className="h-6 w-6" />
+                </Button>
+                <div className="flex-1 h-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                      <Pie
+                        data={incomesChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={110}
+                        innerRadius={55}
+                        fill="#8884d8"
+                        dataKey="value"
+                        onClick={(entry) => handleCategoryClick(entry.name, 'incomes')}
+                        className="cursor-pointer"
+                      >
+                        {incomesChartData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.color}
+                            opacity={selectedIncomeCategory ? (selectedIncomeCategory === entry.name ? 1 : 0.3) : 1}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600">Total</div>
+                      <div className="text-lg font-bold text-green-600">{formatCurrency(totalIncomes)}</div>
+                    </div>
                   </div>
                 </div>
+                <Button variant="ghost" size="icon" onClick={handleNextMonth}>
+                  <ChevronRight className="h-6 w-6" />
+                </Button>
               </div>
               {/* Custom Legend */}
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {incomesChartData.map((entry) => {
                   const percentage = ((entry.value / totalIncomes) * 100).toFixed(1);
+                  const isSelected = selectedIncomeCategory === entry.name;
                   return (
-                    <div key={entry.name} className="flex items-center gap-2 text-xs">
+                    <div
+                      key={entry.name}
+                      className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded transition-colors ${isSelected ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-900'}`}
+                      onClick={() => handleCategoryClick(entry.name, 'incomes')}
+                    >
                       <div 
                         className="w-3 h-3 rounded" 
                         style={{ backgroundColor: entry.color }}
                       ></div>
-                      <span>{entry.name} ({percentage}%)</span>
+                      <span className={isSelected ? 'font-bold' : ''}>{entry.name} ({percentage}%)</span>
                     </div>
                   );
                 })}
               </div>
+              {renderDetailedTable('incomes')}
             </div>
           ) : (
             <div className="text-center py-8">
