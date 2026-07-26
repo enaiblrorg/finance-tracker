@@ -52,7 +52,7 @@ export function MultiSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between h-auto min-h-10 font-normal px-3 py-2 text-left"
+          className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all font-normal text-left"
         >
           <div className="flex flex-wrap gap-1">
             {selected.length === 0 && <span className="text-muted-foreground">{placeholder}</span>}

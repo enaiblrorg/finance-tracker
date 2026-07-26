@@ -1,0 +1,20 @@
+
+> nextjs@0.1.0 dev
+> npx next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1696ms
+ ○ Compiling / ...
+ ✓ Compiled / in 16s (4536 modules)
+You're attempting to animate multiple children within AnimatePresence, but its mode is set to "wait". This will lead to odd visual behaviour.
+ GET / 200 in 16952ms
+ ✓ Compiled in 1453ms (2263 modules)
+ ✓ Compiled in 544ms (2249 modules)
+ ○ Compiling /api/fetch-income ...
+ ✓ Compiled /api/fetch-income in 23.3s (3302 modules)
+ ✓ Compiled (3304 modules)
+❌ GOOGLE_PRIVATE_KEY is not set
+❌ GOOGLE_PRIVATE_KEY is not set
