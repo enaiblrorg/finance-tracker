@@ -113,6 +113,46 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
     return dateStr;
   };
 
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+
+    return date.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const formatDateRange = (fromDateStr: string, toDateStr: string) => {
+    if (!fromDateStr || !toDateStr) return '';
+
+    const fromDate = new Date(fromDateStr);
+    const toDate = new Date(toDateStr);
+
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return `${fromDateStr} - ${toDateStr}`;
+
+    const fromDay = fromDate.getDate();
+    const fromMonth = fromDate.toLocaleDateString('en-GB', { month: 'short' });
+    const fromYear = fromDate.getFullYear();
+
+    const toDay = toDate.getDate();
+    const toMonth = toDate.toLocaleDateString('en-GB', { month: 'short' });
+    const toYear = toDate.getFullYear();
+
+    if (fromYear === toYear) {
+      if (fromMonth === toMonth) {
+        if (fromDay === toDay) {
+          return `${fromDay} ${fromMonth} ${fromYear}`;
+        }
+        return `${fromDay} - ${toDay} ${fromMonth} ${fromYear}`;
+      }
+      return `${fromDay} ${fromMonth} - ${toDay} ${toMonth} ${fromYear}`;
+    }
+    return `${fromDay} ${fromMonth} ${fromYear} - ${toDay} ${toMonth} ${toYear}`;
+  };
+
   const filterData = (data: any[], type: 'expenses' | 'incomes') => {
     return data.filter(item => {
       // Subject filter
@@ -225,7 +265,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                     onClick={() => setExpandedDate(isExpanded ? null : date)}
                   >
-                    <TableCell className="font-medium">{date}</TableCell>
+                    <TableCell className="font-medium">{formatDisplayDate(date)} ({dayItems.length})</TableCell>
                     <TableCell className="text-right">{formatCurrency(dayTotal)}</TableCell>
                   </TableRow>
                   {isExpanded && dayItems.map((item: any, idx: number) => (
@@ -383,7 +423,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
               />
             </h4>
             <p className="text-2xl font-bold text-primary">{formatCurrency(totalExpenses)}</p>
-            <p className="text-sm text-primary/50">{filteredExpenses.length} Transactions</p>
+            <p className="text-sm text-primary/50">{formatDateRange(dateFromFilter, dateToFilter)} • {filteredExpenses.length} Transactions</p>
           </div>
 
           {expensesChartData.length > 0 ? (
@@ -500,7 +540,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
               />
             </h4>
             <p className="text-2xl font-bold text-primary">{formatCurrency(totalIncomes)}</p>
-            <p className="text-sm text-primary/50">{filteredIncomes.length} Transactions</p>
+            <p className="text-sm text-primary/50">{formatDateRange(dateFromFilter, dateToFilter)} • {filteredIncomes.length} Transactions</p>
           </div>
 
           {incomesChartData.length > 0 ? (
