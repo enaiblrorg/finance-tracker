@@ -146,7 +146,12 @@ function InlineDatePicker({
 export function FormReport({ expenses, incomes, loading, error, onRefresh }: FormReportProps) {
 
   // Filters
-  const [expenseSubjectFilters, setExpenseSubjectFilters] = useState<string[]>([]);
+  const [expenseSubjectFilters, setExpenseSubjectFilters] = useState<string[]>([
+    'Al (Personal)',
+    'Al (Family)',
+    'Nurin (Personal)',
+    'Nurin (Family)',
+  ]);
   const [incomeSubjectFilters, setIncomeSubjectFilters] = useState<string[]>([]);
   const [dateFromFilter, setDateFromFilter] = useState<string>(() => {
     const today = new Date();
