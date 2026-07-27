@@ -280,7 +280,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
     if (!activeCategory) return null;
 
     const data = type === 'expenses' ? filteredExpenses : filteredIncomes;
-    const categoryData = data.filter(item => item.category === activeCategory);
+    const categoryData = activeCategory === 'ALL' ? data : data.filter(item => item.category === activeCategory);
 
     // Group by date
     const groupedData = categoryData.reduce((acc, item) => {
@@ -327,7 +327,9 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
         >
           <X className="h-4 w-4" />
         </Button>
-        <h5 className="font-semibold mb-4 text-center">Details for {activeCategory}</h5>
+        <h5 className="font-semibold mb-4 text-center">
+          {activeCategory === 'ALL' ? 'All Transactions Details' : `Details for ${activeCategory}`}
+        </h5>
         <Table>
           <TableHeader>
             <TableRow>
@@ -353,7 +355,14 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                   {isExpanded && dayItems.map((item: any, idx: number) => (
                     <TableRow key={`${date}-${idx}`} className="bg-gray-50 dark:bg-gray-900/50 text-sm">
                       <TableCell className="pl-6 text-gray-600 dark:text-gray-400">
-                        {item.description || item.subject}
+                        {activeCategory === 'ALL' ? (
+                          <>
+                            <span className="font-semibold text-gray-900 dark:text-gray-100">{item.category}</span>
+                            {item.description || item.subject ? ` - ${item.description || item.subject}` : ''}
+                          </>
+                        ) : (
+                          item.description || item.subject
+                        )}
                       </TableCell>
                       <TableCell className="text-right text-gray-600 dark:text-gray-400">
                         {formatCurrency(item.amount)}
@@ -479,7 +488,16 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                 onClick={refreshData}
               />
             </h4>
-            <p className="text-2xl font-bold text-primary">{formatCurrency(totalExpenses)}</p>
+            <button
+              className="text-2xl font-bold text-primary cursor-pointer hover:underline decoration-dotted underline-offset-4 bg-transparent border-none p-0"
+              onClick={() => {
+                setSelectedCategory('ALL');
+                setSelectedIncomeCategory(null);
+                setExpandedDate(null);
+              }}
+            >
+              {formatCurrency(totalExpenses)}
+            </button>
             <div className="text-sm text-primary/50 flex items-center justify-center gap-1.5 flex-wrap">
               <InlineDatePicker date={dateFromFilter} setDate={setDateFromFilter} label={dateRangeParts.startPart} />
               <span>-</span>
@@ -515,7 +533,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                           <Cell
                             key={`cell-${index}`}
                             fill={entry.color}
-                            opacity={selectedCategory ? (selectedCategory === entry.name ? 1 : 0.3) : 1}
+                            opacity={selectedCategory && selectedCategory !== 'ALL' ? (selectedCategory === entry.name ? 1 : 0.3) : 1}
                           />
                         ))}
                       </Pie>
@@ -583,7 +601,16 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                 onClick={refreshData}
               />
             </h4>
-            <p className="text-2xl font-bold text-primary">{formatCurrency(totalIncomes)}</p>
+            <button
+              className="text-2xl font-bold text-primary cursor-pointer hover:underline decoration-dotted underline-offset-4 bg-transparent border-none p-0"
+              onClick={() => {
+                setSelectedIncomeCategory('ALL');
+                setSelectedCategory(null);
+                setExpandedDate(null);
+              }}
+            >
+              {formatCurrency(totalIncomes)}
+            </button>
             <div className="text-sm text-primary/50 flex items-center justify-center gap-1.5 flex-wrap">
               <InlineDatePicker date={dateFromFilter} setDate={setDateFromFilter} label={dateRangeParts.startPart} />
               <span>-</span>
@@ -620,7 +647,7 @@ export function FormReport({ expenses, incomes, loading, error, onRefresh }: For
                             <Cell
                               key={`cell-${index}`}
                               fill={entry.color}
-                              opacity={selectedIncomeCategory ? (selectedIncomeCategory === entry.name ? 1 : 0.3) : 1}
+                              opacity={selectedIncomeCategory && selectedIncomeCategory !== 'ALL' ? (selectedIncomeCategory === entry.name ? 1 : 0.3) : 1}
                             />
                           ))}
                         </Pie>
